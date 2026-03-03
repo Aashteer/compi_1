@@ -83,14 +83,12 @@ class Translator:
                 'Строка:': 'Строка:',
                 'Столбец:': 'Столбец:',
                 
-                # Названия вкладок
                 'Новый файл 1': 'Новый файл 1',
                 'Новый файл 2': 'Новый файл 2',
                 'Новый файл 3': 'Новый файл 3',
                 'Новый файл 4': 'Новый файл 4',
                 'Новый файл 5': 'Новый файл 5',
                 
-                # Tooltips для иконок
                 'Создать новый документ': 'Создать новый документ',
                 'Открыть существующий файл': 'Открыть существующий файл',
                 'Сохранить текущий документ': 'Сохранить текущий документ',
@@ -102,7 +100,6 @@ class Translator:
                 'Запустить анализатор': 'Запустить анализатор',
                 'Показать справку': 'Показать справку',
                 
-                # Текст для диалоговых окон
                 'Версия: 2.0 (с дополнительными функциями)': 'Версия: 2.0 (с дополнительными функциями)',
                 'Разработчики: Тоха, Александр, Виталя': 'Разработчики: Тоха, Александр, Виталя',
                 '© 2026 Все права защищены нами.': '© 2026 Все права защищены нами.',
@@ -111,7 +108,6 @@ class Translator:
                 'Да': 'Да',
                 'Нет': 'Нет',
                 
-                # Дополнительные строки для справки
                 '=== СПРАВКА ПО ТЕКСТОВОМУ РЕДАКТОРУ ===': '=== СПРАВКА ПО ТЕКСТОВОМУ РЕДАКТОРУ ===',
                 'Функции меню "Файл":': 'Функции меню "Файл":',
                 'Функции меню "Правка":': 'Функции меню "Правка":',
@@ -208,14 +204,12 @@ class Translator:
                 'Строка:': 'Line:',
                 'Столбец:': 'Column:',
                 
-                # Названия вкладок
                 'Новый файл 1': 'Untitled 1',
                 'Новый файл 2': 'Untitled 2',
                 'Новый файл 3': 'Untitled 3',
                 'Новый файл 4': 'Untitled 4',
                 'Новый файл 5': 'Untitled 5',
                 
-                # Tooltips для иконок
                 'Создать новый документ': 'Create new document',
                 'Открыть существующий файл': 'Open existing file',
                 'Сохранить текущий документ': 'Save current document',
@@ -227,7 +221,6 @@ class Translator:
                 'Запустить анализатор': 'Run analyzer',
                 'Показать справку': 'Show help',
                 
-                # Текст для диалоговых окон
                 'Версия: 2.0 (с дополнительными функциями)': 'Version: 2.0 (with additional features)',
                 'Разработчики: Тоха, Александр, Виталя': 'Developers: Tokha, Alexander, Vitaly',
                 '© 2026 Все права защищены нами.': '© 2026 All rights reserved by us.',
@@ -236,7 +229,6 @@ class Translator:
                 'Да': 'Yes',
                 'Нет': 'No',
                 
-                # Дополнительные строки для справки
                 '=== СПРАВКА ПО ТЕКСТОВОМУ РЕДАКТОРУ ===': '=== TEXT EDITOR HELP ===',
                 'Функции меню "Файл":': 'File menu functions:',
                 'Функции меню "Правка":': 'Edit menu functions:',
@@ -357,7 +349,6 @@ class CodeEditor(QPlainTextEdit):
         for url in event.mimeData().urls():
             file_path = url.toLocalFile()
             if file_path.endswith('.txt'):
-                # Находим главное окно приложения
                 main_window = None
                 for widget in QApplication.topLevelWidgets():
                     if isinstance(widget, TextEditor):
@@ -755,13 +746,10 @@ class TextEditor(QMainWindow):
         self.update_toolbar()
     
     def update_toolbar(self):
-        # Очищаем тулбар
         self.toolbar.clear()
         
-        # Создаем иконки вручную
         def create_icon(name):
             if name == 'system-run':
-                # Создаем иконку для запуска (зеленый треугольник)
                 pixmap = QPixmap(24, 24)
                 pixmap.fill(Qt.GlobalColor.transparent)
                 painter = QPainter(pixmap)
@@ -772,7 +760,6 @@ class TextEditor(QMainWindow):
                 painter.end()
                 return QIcon(pixmap)
             elif name == 'help-contents':
-                # Создаем иконку для справки (синий вопросительный знак)
                 pixmap = QPixmap(24, 24)
                 pixmap.fill(Qt.GlobalColor.transparent)
                 painter = QPainter(pixmap)
@@ -785,7 +772,6 @@ class TextEditor(QMainWindow):
                 painter.end()
                 return QIcon(pixmap)
             elif name == 'help-about':
-                # Создаем иконку для "о программе" (синяя буква i)
                 pixmap = QPixmap(24, 24)
                 pixmap.fill(Qt.GlobalColor.transparent)
                 painter = QPainter(pixmap)
@@ -824,7 +810,7 @@ class TextEditor(QMainWindow):
             icon_name, tooltip, func = item
             icon = create_icon(icon_name)
             act = QAction(icon, "", self)
-            act.setToolTip(tooltip)  # Теперь тултип будет на текущем языке
+            act.setToolTip(tooltip)  
             act.triggered.connect(func)
             self.toolbar.addAction(act)
     
@@ -846,7 +832,6 @@ class TextEditor(QMainWindow):
         self.update_cursor_position()
         self.update_file_info(None)
         
-        # Обновляем названия вкладок
         for i in range(self.editor_tabs.count()):
             tab = self.editor_tabs.widget(i)
             if tab and not tab.current_file:
@@ -865,8 +850,7 @@ class TextEditor(QMainWindow):
                     if self.editor_tabs.tabText(i).endswith('*'):
                         new_text += '*'
                     self.editor_tabs.setTabText(i, new_text)
-        
-        # Обновляем тулбар с переведенными подсказками
+
         self.update_toolbar()
     
     def change_language(self, lang):
