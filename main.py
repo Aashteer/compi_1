@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 from scanner import Scanner
+import subprocess
 
 
 class Translator:
@@ -138,7 +139,10 @@ class Translator:
                 'Есть несохраненные изменения. Закрыть программу?': 'Есть несохраненные изменения. Закрыть программу?',
                 'Навигация по ошибкам': 'Навигация по ошибкам',
                 'Кликните на строке с ошибкой для перехода к позиции': 'Кликните на строке с ошибкой для перехода к позиции',
-                
+                'FLEX + BISON анализ:': 'FLEX + BISON анализ:',
+                'Парсер завершён успешно': 'Парсер завершён успешно',
+                'Синтаксическая ошибка от Bison-парсера:': 'Синтаксическая ошибка от Bison-парсера:',
+                'Не удалось запустить парсер:': 'Не удалось запустить парсер:',
             },
             'en': {
                 'Текстовый редактор с языковым процессором': 'Text Editor with Language Processor',
@@ -288,7 +292,7 @@ class Translator:
         }
 
     def tr(self, text):
-        return self.data.get(self.lang, self.data['ru']).get(text, text)
+            return self.data.get(self.lang, self.data['ru']).get(text, text)
 
     def set_language(self, lang):
         if lang in self.data:
@@ -1074,68 +1078,122 @@ class TextEditor(QMainWindow):
         editor.code_editor.centerCursor()
     
     def start_analyzer(self):
-        tab = self.get_current_editor()
-        if not tab:
-            return
-        
-        text = tab.get_text()
-        
-        self.tokens_tab.clear_results()
-        self.error_table_tab.clear_results()
-        
-        if not text.strip():
-            self.result_text.setPlainText(self.tr('Текст для анализа отсутствует.'))
-            return
-        
-        results = self.scanner.analyze(text)
-        
-        current_lang = self.translator.lang
-        
-        if current_lang == 'ru':
-            tokens_text = f"{self.tr('=== РЕЗУЛЬТАТЫ ЛЕКСИЧЕСКОГО АНАЛИЗА ===')}\n\n"
-        else:
-            tokens_text = f"=== LEXICAL ANALYSIS RESULTS ===\n\n"
-        
-        tokens_text += f"{self.tr('Найдено лексем:')} {len(results['tokens'])}\n"
-        tokens_text += f"{self.tr('Найдено ошибок:')} {len(results['errors'])}\n\n"
-        
-        if results['tokens']:
+            tab = self.get_current_editor()
+            if not tab:
+                return
+            
+            text = tab.get_text()
+            
+            self.tokens_tab.clear_results()
+            self.error_table_tab.clear_results()
+            
+            if not text.strip():
+                self.result_text.setPlainText(self.tr('Текст для анализа отсутствует.'))
+                return
+            
+            # 1. Твой существующий лексический анализатор
+            results = self.scanner.analyze(text)
+            
+            current_lang = self.translator.lang
+            
             if current_lang == 'ru':
-                tokens_text += f"{self.tr('Список лексем:')}\n"
+                tokens_text = f"{self.tr('=== РЕЗУЛЬТАТЫ ЛЕКСИЧЕСКОГО АНАЛИЗА ===')}\n\n"
             else:
-                tokens_text += f"Token list:\n"
-            tokens_text += "-" * 70 + "\n"
-            for token in results['tokens']:
-                if token.token_type != 'ERROR':
-                    display_type = token.get_display_type(current_lang)
-                    display_value = token.get_display_value(current_lang) 
-                    if current_lang == 'ru':
-                        location = f"строка {token.line:2d}, {token.start:2d}-{token.end:2d}"
-                    else:
-                        location = f"line {token.line:2d}, {token.start:2d}-{token.end:2d}"
-                    tokens_text += f"{token.code:3d} | {display_type:20} | '{display_value:10}' | {location}\n"
-        
-        if results['errors']:
-            if current_lang == 'ru':
-                tokens_text += f"\n{self.tr('Список ошибок:')}\n"
-            else:
-                tokens_text += f"\nError list:\n"
-            tokens_text += "-" * 70 + "\n"
-            for error in results['errors']:
+                tokens_text = f"=== LEXICAL ANALYSIS RESULTS ===\n\n"
+            
+            tokens_text += f"{self.tr('Найдено лексем:')} {len(results['tokens'])}\n"
+            tokens_text += f"{self.tr('Найдено ошибок:')} {len(results['errors'])}\n\n"
+            
+            if results['tokens']:
                 if current_lang == 'ru':
-                    tokens_text += f"{self.tr('Строка')} {error.line:2d}, {self.tr('Позиция')} {error.start:2d}: {error.value}\n"
+                    tokens_text += f"{self.tr('Список лексем:')}\n"
                 else:
-                    tokens_text += f"Line {error.line:2d}, Position {error.start:2d}: {error.value}\n"
-        
-        self.result_text.setPlainText(tokens_text)
-        
-        for token in results['tokens']:
-            self.tokens_tab.add_result(*token.to_table_row(current_lang))
-        
-        for error in results['errors']:
-            self.error_table_tab.add_result(*error.to_table_row(current_lang))
-        
-        self.status_bar.showMessage(f"{self.tr('Анализ завершен')}. {self.tr('Лексем:')} {len(results['tokens'])}, {self.tr('Ошибок:')} {len(results['errors'])}")
+                    tokens_text += f"Token list:\n"
+                tokens_text += "-" * 70 + "\n"
+                for token in results['tokens']:
+                    if token.token_type != 'ERROR':
+                        display_type = token.get_display_type(current_lang)
+                        display_value = token.get_display_value(current_lang)
+                        if current_lang == 'ru':
+                            location = f"строка {token.line:2d}, {token.start:2d}-{token.end:2d}"
+                        else:
+                            location = f"line {token.line:2d}, {token.start:2d}-{token.end:2d}"
+                        tokens_text += f"{token.code:3d} | {display_type:20} | '{display_value:10}' | {location}\n"
+            
+            if results['errors']:
+                if current_lang == 'ru':
+                    tokens_text += f"\n{self.tr('Список ошибок:')}\n"
+                else:
+                    tokens_text += f"\nError list:\n"
+                tokens_text += "-" * 70 + "\n"
+                for error in results['errors']:
+                    if current_lang == 'ru':
+                        tokens_text += f"{self.tr('Строка')} {error.line:2d}, {self.tr('Позиция')} {error.start:2d}: {error.value}\n"
+                    else:
+                        tokens_text += f"Line {error.line:2d}, Position {error.start:2d}: {error.value}\n"
+            
+            self.result_text.setPlainText(tokens_text)
+            
+            for token in results['tokens']:
+                self.tokens_tab.add_result(*token.to_table_row(current_lang))
+            
+            for error in results['errors']:
+                self.error_table_tab.add_result(*error.to_table_row(current_lang))
+            exe_name = "python_parser.exe"
+            exe_path = r"G:\compi_1\python_parser.exe"
+
+            if not os.path.isfile(exe_path):
+                self.error_table_tab.add_result(99, "ERROR", f"Парсер не найден: {exe_path}", "—")
+                self.statusBar().showMessage("Ошибка: FLEX+BISON парсер не найден", 7000)
+                return
+
+            temp_file = "temp_input.py"
+            temp_path = os.path.join(os.path.dirname(exe_path), temp_file)
+
+            try:
+                with open(temp_path, "w", encoding="utf-8") as f:
+                    f.write(text)
+
+                result = subprocess.run(
+                    [exe_path, temp_file],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    cwd=os.path.dirname(exe_path),
+                    timeout=10,
+                )
+
+                output = result.stdout.strip()
+                err_out = result.stderr.strip()
+
+                bison_text = "\n\n=== FLEX + BISON анализ ===\n"
+                if result.returncode == 0 and output:
+                    bison_text += output + "\n"
+                    bison_text += "Парсер завершён успешно\n"
+                    self.result_text.append(bison_text)
+                    self.statusBar().showMessage("Синтаксический анализ завершён успешно", 5000)
+                else:
+                    error_msg = err_out or output or f"Парсер завершился с кодом {result.returncode}"
+                    bison_text += "Синтаксическая ошибка от Bison-парсера:\n" + error_msg
+                    self.result_text.append(bison_text)
+                    self.error_table_tab.add_result(99, "BISON_ERROR", error_msg, "—")
+                    self.statusBar().showMessage("Ошибка синтаксического анализа", 5000)
+
+            except subprocess.TimeoutExpired:
+                self.error_table_tab.add_result(99, "TIMEOUT", "Парсер завис (10 сек)", "—")
+            except FileNotFoundError:
+                self.error_table_tab.add_result(99, "NOT_FOUND", f"Не найден: {exe_path}", "—")
+            except Exception as e:
+                self.error_table_tab.add_result(99, "EXCEPTION", str(e), "—")
+            finally:
+                if os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except:
+                        pass
+
+            self.status_bar.showMessage(f"{self.tr('Анализ завершен')}. Лексем: {len(results['tokens'])}, Ошибок: {len(results['errors'])}")
+                
     
     def show_help(self):
         help_text = self.tr('=== СПРАВКА ПО ТЕКСТОВОМУ РЕДАКТОРУ ===') + '\n\n' + \
