@@ -7,7 +7,7 @@ program
     ;
 
 ifStmt
-    : IF cond COLON suite ELSE COLON suite SEMI
+    : IF cond COLON suite ELSE COLON suite
     ;
 
 cond
@@ -37,7 +37,7 @@ suite
     ;
 
 stmt
-    : ID ASSIGN expr
+    : ID ASSIGN expr SEMI
     ;
 
 IF      : 'if' ;

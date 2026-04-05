@@ -197,3 +197,4 @@ class SyntaxErrorResultTab(QWidget):
             line = int(match.group(1))
             col = int(match.group(2))
             self.main_window.go_to_position(line, col)
+            

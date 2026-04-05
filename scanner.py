@@ -243,3 +243,4 @@ class Scanner:
 
     def get_errors_table_data(self, lang='ru') -> List[tuple]:
         return [token.to_table_row(lang) for token in self.errors]
+    

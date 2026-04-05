@@ -297,3 +297,4 @@ class Translator:
     def set_language(self, lang):
         if lang in self.data:
             self.lang = lang
+            

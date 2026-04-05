@@ -180,3 +180,4 @@ class EditorTab(QWidget):
     def set_text(self, text):
         self.code_editor.setPlainText(text)
         self.text_modified = False
+        

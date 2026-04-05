@@ -29,6 +29,8 @@ class ParseResult:
 
 class Parser:
     REL_OPS = {'>', '<', '>=', '<=', '==', '!='}
+    AUG_ASSIGN_OPS = {'+=', '-=', '*=', '/='}
+    ASSIGN_OPS = {'='} | AUG_ASSIGN_OPS
     SYNC_KEYWORDS: Set[str] = {'if', 'else', 'elif'}
 
     def __init__(self, tokens: List["Token"], lang: str = "ru"):
@@ -65,7 +67,16 @@ class Parser:
             )
             return ParseResult(ok=False, errors=list(self.errors))
 
-        self._parse_if_stmt()
+        if not self._parse_if_stmt():
+            t = self._current()
+            self._add_error(
+                self._fragment(t),
+                t.line if t else 1,
+                t.start if t else 1,
+                self._m("Ожидалось ключевое слово if", "Expected keyword 'if'"),
+            )
+            # continue parsing to find all errors
+            self._parse_fallback_statement()
 
         if self._current() is not None:
             t = self._current()
@@ -78,10 +89,70 @@ class Parser:
                     "Extra tokens after the if-else construct",
                 ),
             )
-            while self._current() is not None:
-                self._advance()
 
         return ParseResult(ok=len(self.errors) == 0, errors=list(self.errors))
+
+    def _parse_fallback_statement(self) -> None:
+        """Parse remaining code when 'if' is missing to report all errors."""
+        # Try to parse condition until :
+        self._parse_cond()
+        
+        # Expect : 
+        if not self._match_delimiter(":"):
+            t = self._current()
+            self._add_error(
+                self._fragment(t),
+                t.line if t else 1,
+                t.start if t else 1,
+                self._m("Ожидалось ':' после условия", "Expected ':' after condition"),
+            )
+            # When colon is missing, report all remaining code as errors
+            while self._current() is not None:
+                self._skip_newlines()
+                if self._current() is None:
+                    break
+                # Report everything as unexpected tokens - don't try to parse as statements
+                t = self._current()
+                self._add_error(
+                    self._fragment(t),
+                    t.line,
+                    t.start,
+                    self._m("Неожиданный лексема - ожидалось ':' после условия", "Unexpected token - expected ':' after condition"),
+                )
+                # skip to next newline to continue finding all errors
+                while self._current() is not None and not self._is_newline():
+                    self._advance()
+            return
+        
+        self._skip_newlines()
+        # Try to parse body
+        self._parse_suite(sync_before_else=True)
+        self._skip_newlines()
+        
+        # Check for unexpected 'else' - should report it as misplaced without matching 'if'
+        if self._current() and self._current().token_type == "KEYWORD" and self._current().value == "else":
+            t = self._current()
+            self._add_error(
+                self._fragment(t),
+                t.line,
+                t.start,
+                self._m("Неожиданное 'else' без соответствующего 'if'", "Unexpected 'else' without matching 'if'"),
+            )
+            self._advance()
+            if not self._match_delimiter(":"):
+                t = self._current()
+                self._add_error(
+                    self._fragment(t),
+                    t.line if t else 1,
+                    t.start if t else 1,
+                    self._m("Ожидалось ':' после else", "Expected ':' after 'else'"),
+                )
+                while self._current() is not None and not self._is_newline():
+                    self._advance()
+            
+            self._skip_newlines()
+            self._parse_suite(sync_before_else=False)
+            self._skip_newlines()
 
     def _current(self) -> Optional["Token"]:
         if self.i >= len(self.tokens):
@@ -111,20 +182,11 @@ class Parser:
                 return
             self._advance()
 
-    def _parse_if_stmt(self) -> None:
+    def _parse_if_stmt(self) -> bool:
         if not self._match_keyword("if"):
-            t = self._current()
-            self._add_error(
-                self._fragment(t),
-                t.line if t else 1,
-                t.start if t else 1,
-                self._m("Ожидалось ключевое слово if", "Expected keyword 'if'"),
-            )
-            self._sync_skip_to("if", ":")
-            if not self._match_keyword("if"):
-                return
+            return False
 
-        self._parse_condition()
+        self._parse_cond()
 
         if not self._match_delimiter(":"):
             t = self._current()
@@ -134,67 +196,119 @@ class Parser:
                 t.start if t else 1,
                 self._m("Ожидалось ':' после условия", "Expected ':' after condition"),
             )
-            self._sync_skip_to(":", "else")
-            self._match_delimiter(":")
+            if not (self._current() and self._current().token_type == "DELIMITER" and self._current().value == "\\n"):
+                self._sync_skip_to(":", "else", "if")
+                self._match_delimiter(":")
 
+        self._skip_newlines()
         self._parse_suite(sync_before_else=True)
+        self._skip_newlines()
 
-        if not self._match_keyword("else"):
+        if self._match_keyword("else"):
+            if not self._match_delimiter(":"):
+                t = self._current()
+                self._add_error(
+                    self._fragment(t),
+                    t.line if t else 1,
+                    t.start if t else 1,
+                    self._m("Ожидалось ':' после else", "Expected ':' after 'else'"),
+                )
+                if not (self._current() and self._current().token_type == "DELIMITER" and self._current().value == "\\n"):
+                    self._sync_skip_to(":", "if", "else")
+                self._match_delimiter(":")
+
+            self._skip_newlines()
+            self._parse_suite(sync_before_else=False)
+            self._skip_newlines()
+
+        return True
+
+    def _parse_cond(self) -> bool:
+        if not self._parse_logical_term():
             t = self._current()
             self._add_error(
                 self._fragment(t),
                 t.line if t else 1,
                 t.start if t else 1,
-                self._m("Ожидалось ключевое слово else", "Expected keyword 'else'"),
+                self._m("Ожидалось условие", "Expected condition"),
             )
-            self._sync_skip_to("else", ":")
-            if not self._match_keyword("else"):
-                return
+            self._sync_skip_to(":", "else", "if")
+            return False
 
-        if not self._match_delimiter(":"):
+        while self._match_keyword("or"):
+            if not self._parse_logical_term():
+                t = self._current()
+                self._add_error(
+                    self._fragment(t),
+                    t.line if t else 1,
+                    t.start if t else 1,
+                    self._m("Ожидался операнд после 'or'", "Expected operand after 'or'"),
+                )
+                self._sync_skip_to("or", "and", ":", "else", "if")
+                return False
+        return True
+
+    def _parse_logical_term(self) -> bool:
+        if not self._parse_logical_factor():
+            return False
+
+        while self._match_keyword("and"):
+            if not self._parse_logical_factor():
+                t = self._current()
+                self._add_error(
+                    self._fragment(t),
+                    t.line if t else 1,
+                    t.start if t else 1,
+                    self._m("Ожидался операнд после 'and'", "Expected operand after 'and'"),
+                )
+                self._sync_skip_to("or", "and", ":", "else", "if")
+                return False
+        return True
+
+    def _parse_logical_factor(self) -> bool:
+        if self._match_keyword("not"):
+            if not self._parse_primary_cond():
+                t = self._current()
+                self._add_error(
+                    self._fragment(t),
+                    t.line if t else 1,
+                    t.start if t else 1,
+                    self._m("Ожидалось условие после 'not'", "Expected condition after 'not'"),
+                )
+                return False
+            return True
+        return self._parse_primary_cond()
+
+    def _parse_primary_cond(self) -> bool:
+        if self._match_delimiter("("):
+            if not self._parse_condition():
+                return False
+            if not self._match_delimiter(")"):
+                t = self._current()
+                self._add_error(
+                    self._fragment(t),
+                    t.line if t else 1,
+                    t.start if t else 1,
+                    self._m("Ожидалась закрывающая скобка ')'", "Expected closing parenthesis ')'"),
+                )
+                self._sync_skip_to("or", "and", ":", "else", "if")
+                return False
+            return True
+        return self._parse_compare()
+
+    def _parse_compare(self) -> bool:
+        if not (self._is_identifier() or self._is_integer()):
             t = self._current()
             self._add_error(
                 self._fragment(t),
                 t.line if t else 1,
                 t.start if t else 1,
-                self._m("Ожидалось ':' после else", "Expected ':' after 'else'"),
+                self._m("Ожидался идентификатор или число в левой части сравнения", "Expected identifier or number in left comparison operand"),
             )
-            self._sync_skip_to(":", "if", "else")
-            self._match_delimiter(":")
+            self._sync_skip_to("or", "and", ":", "else", "if")
+            return False
 
-        self._parse_suite(sync_before_else=False)
-
-        while self._is_newline():
-            self._advance()
-
-        if not self._match_delimiter(";"):
-            t = self._current()
-            self._add_error(
-                self._fragment(t),
-                t.line if t else 1,
-                t.start if t else 1,
-                self._m(
-                    "Ожидалась ';' в конце конструкции if-else",
-                    "Expected ';' at the end of the if-else construct",
-                ),
-            )
-            self._sync_skip_to(";", "\n", "if")
-
-        while self._is_newline():
-            self._advance()
-
-    def _parse_condition(self) -> None:
-        start_ok = self._parse_expr()
-        if not start_ok:
-            t = self._current()
-            self._add_error(
-                self._fragment(t),
-                t.line if t else 1,
-                t.start if t else 1,
-                self._m("Ожидалось выражение в условии", "Expected expression in condition"),
-            )
-            self._sync_skip_to(":", "else")
-            return
+        self._advance()
 
         if not self._parse_rel_op():
             t = self._current()
@@ -202,26 +316,24 @@ class Parser:
                 self._fragment(t),
                 t.line if t else 1,
                 t.start if t else 1,
-                self._m(
-                    "Ожидался оператор сравнения (>, <, >=, <=, ==, !=)",
-                    "Expected comparison operator (>, <, >=, <=, ==, !=)",
-                ),
+                self._m("Ожидался оператор сравнения", "Expected comparison operator"),
             )
-            self._sync_skip_to(":", "else")
-            return
+            self._sync_skip_to("or", "and", ":", "else", "if")
+            return False
 
-        if not self._parse_expr():
+        if not (self._is_identifier() or self._is_integer()):
             t = self._current()
             self._add_error(
                 self._fragment(t),
                 t.line if t else 1,
                 t.start if t else 1,
-                self._m(
-                    "Ожидалось выражение после оператора сравнения",
-                    "Expected expression after comparison operator",
-                ),
+                self._m("Ожидался идентификатор или число в правой части сравнения", "Expected identifier or number in right comparison operand"),
             )
-            self._sync_skip_to(":", "else")
+            self._sync_skip_to("or", "and", ":", "else", "if")
+            return False
+
+        self._advance()
+        return True
 
     def _parse_rel_op(self) -> bool:
         t = self._current()
@@ -234,15 +346,15 @@ class Parser:
         while self._is_newline():
             self._advance()
 
-        if not self._parse_stmt():
+        if not self._parse_stmt_or_if():
             t = self._current()
             self._add_error(
                 self._fragment(t),
                 t.line if t else 1,
                 t.start if t else 1,
                 self._m(
-                    "Ожидался оператор присваивания (идентификатор = выражение)",
-                    "Expected assignment (identifier = expression)",
+                    "Ожидался оператор присваивания или вложенный if",
+                    "Expected assignment or nested if",
                 ),
             )
             if sync_before_else:
@@ -254,23 +366,27 @@ class Parser:
         while self._is_newline():
             self._advance()
 
+    def _parse_stmt_or_if(self) -> bool:
+        if self._parse_if_stmt():
+            return True
+        return self._parse_stmt()
+
     def _parse_stmt(self) -> bool:
         t = self._current()
         if not t or t.token_type != "IDENTIFIER":
             return False
         self._advance()
 
-        if not self._match_operator("="):
+        if not self._match_assignment_operator():
             ct = self._current()
             self._add_error(
                 self._fragment(ct),
                 ct.line if ct else t.line,
                 ct.start if ct else t.start,
-                self._m("Ожидался оператор '='", "Expected '=' operator"),
+                self._m("Ожидался оператор присваивания", "Expected assignment operator"),
             )
-            self._sync_skip_to("else", ";", "\n", ":")
-            return False
-
+            # continue parsing RHS and semicolon to report all errors
+        
         if not self._parse_expr():
             ct = self._current()
             self._add_error(
@@ -283,9 +399,88 @@ class Parser:
                 ),
             )
             self._sync_skip_to("else", ";", "\n")
+            return True
+
+        if not self._match_delimiter(";"):
+            ct = self._current()
+            self._add_error(
+                self._fragment(ct),
+                ct.line if ct else t.line,
+                ct.start if ct else t.start,
+                self._m(
+                    "Ожидался ';' после присваивания",
+                    "Expected ';' after assignment",
+                ),
+            )
+            self._sync_skip_to("else", ";", "\n")
+            return True
+
+        return True
+
+    def _parse_assign_stmt(self) -> bool:
+        self._skip_newlines()
+        t = self._current()
+        if not self._is_identifier():
+            if t is None:
+                self._add_error(
+                    "EOF",
+                    self.tokens[-1].line if self.tokens else 1,
+                    self.tokens[-1].end if self.tokens else 1,
+                    self._m("Ожидался идентификатор до присваивания", "Expected identifier before assignment"),
+                )
+            else:
+                self._add_error(
+                    self._fragment(t),
+                    t.line,
+                    t.start,
+                    self._m("Ожидался идентификатор перед присваиванием", "Expected identifier before assignment"),
+                )
+            self._sync_skip_to(";", "else", "if")
+            return False
+
+        self._advance()
+
+        if not self._match_assignment_operator():
+            ct = self._current()
+            self._add_error(
+                self._fragment(ct),
+                ct.line if ct else t.line,
+                ct.start if ct else t.start,
+                self._m("Ожидался оператор присваивания", "Expected assignment operator"),
+            )
+            # continue parsing RHS and semicolon to report all errors
+        
+        if not self._parse_expr():
+            ct = self._current()
+            self._add_error(
+                self._fragment(ct),
+                ct.line if ct else t.line,
+                ct.start if ct else t.start,
+                self._m(
+                    "Ожидалось выражение в правой части присваивания",
+                    "Expected expression on the right-hand side of assignment",
+                ),
+            )
+            self._sync_skip_to(";", "else", "if")
+            return False
+
+        if not self._match_delimiter(";"):
+            ct = self._current()
+            self._add_error(
+                self._fragment(ct),
+                ct.line if ct else t.line,
+                ct.start if ct else t.start,
+                self._m("Ожидался ';' после присваивания", "Expected ';' after assignment"),
+            )
+            self._sync_skip_to(";", "else", "if")
+            self._match_delimiter(";")
             return False
 
         return True
+
+    def _skip_newlines(self) -> None:
+        while self._is_newline():
+            self._advance()
 
     def _parse_expr(self) -> bool:
         if not self._parse_term():
@@ -341,6 +536,10 @@ class Parser:
             )
             return False
 
+        if t.token_type == "OPERATOR" and t.value in ("+", "-"):
+            self._advance()
+            return self._parse_factor()
+
         if t.token_type == "IDENTIFIER" or t.token_type == "INTEGER":
             self._advance()
             return True
@@ -377,6 +576,14 @@ class Parser:
         t = self._current()
         return t is not None and t.token_type == "DELIMITER" and t.value == ch
 
+    def _is_identifier(self) -> bool:
+        t = self._current()
+        return t is not None and t.token_type == "IDENTIFIER"
+
+    def _is_integer(self) -> bool:
+        t = self._current()
+        return t is not None and t.token_type == "INTEGER"
+
     def _match_keyword(self, word: str) -> bool:
         t = self._current()
         if t and t.token_type == "KEYWORD" and t.value == word:
@@ -387,6 +594,13 @@ class Parser:
     def _match_delimiter(self, ch: str) -> bool:
         t = self._current()
         if t and t.token_type == "DELIMITER" and t.value == ch:
+            self._advance()
+            return True
+        return False
+
+    def _match_assignment_operator(self) -> bool:
+        t = self._current()
+        if t and t.token_type == "OPERATOR" and t.value in self.ASSIGN_OPS:
             self._advance()
             return True
         return False

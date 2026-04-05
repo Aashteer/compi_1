@@ -9,7 +9,6 @@ from editor_tab import EditorTab
 from result_tabs import ResultTab, SyntaxErrorResultTab
 from scanner import Scanner
 from parser import Parser
-from antlr_parser_adapter import ANTLRParserAdapter
 
 
 class TextEditor(QMainWindow):
@@ -584,8 +583,7 @@ class TextEditor(QMainWindow):
             for error in results['errors']:
                 self.error_table_tab.add_result(*error.to_table_row(current_lang))
 
-            # Use ANTLR-based parser
-            parse_result = ANTLRParserAdapter(text, lang=current_lang).parse()
+            parse_result = Parser(results['tokens'], lang=current_lang).parse()
             for err in parse_result.errors:
                 loc = err.location_ru() if current_lang == 'ru' else err.location_en()
                 self.syntax_error_tab.add_row(err.fragment, loc, err.message)

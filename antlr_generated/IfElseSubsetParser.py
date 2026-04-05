@@ -232,8 +232,6 @@ class IfElseSubsetParser ( Parser ):
             self.match(IfElseSubsetParser.COLON)
             self.state = 33
             self.suite()
-            self.state = 34
-            self.match(IfElseSubsetParser.SEMI)
         except RecognitionException as re:
             localctx.exception = re
             self._errHandler.reportError(self, re)
@@ -694,6 +692,8 @@ class IfElseSubsetParser ( Parser ):
             self.match(IfElseSubsetParser.ASSIGN)
             self.state = 81
             self.expr()
+            self.state = 82
+            self.match(IfElseSubsetParser.SEMI)
         except RecognitionException as re:
             localctx.exception = re
             self._errHandler.reportError(self, re)
