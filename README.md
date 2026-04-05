@@ -432,20 +432,20 @@ compi_1/
 3. **Отображение результатов** (`main_window.py` → `result_tabs.py`)
 
 ## 11. Грамматика
-1)  <START> → 'if' ' <COND> ':' <THEN> <ELSE_OPT> ';' 
-2)  <COND> → <LOGICAL_TERM> <LOGICAL_EXPR_TAIL>
-3) <LOGICAL_EXPR_TAIL> → 'or' <LOGICAL_TERM> <LOGICAL_EXPR_TAIL> | eps
-4) <LOGICAL_TERM> → <LOGICAL_FACTOR> <LOGICAL_TERM_TAIL>
-5) <LOGICAL_TERM_TAIL> → 'and' <LOGICAL_FACTOR> <LOGICAL_TERM_TAIL> | eps
-6) <LOGICAL_FACTOR> → 'not' <PRIMARY_COND> | <PRIMARY_COND>
-7) <PRIMARY_COND> → <COMPARE> | '(' <COND> ')'
-8) <COMPARE> → <ID> <OPERATOR> <ID>
-9) <OPERATOR> → '>' | '<' | '>=' | '<=' | '==' | '!='
-10)  <THEN> → <VAR> '=' <VAR> ';'
-11)  <ELSE_OPT> → 'else:' ' <ASSIGN> | eps
-12)  <ASSIGN> → <VAR> '=' <VAR>';'
-13)  <VAR> → letter <VAR_TAIL>
-14)  <VAR_TAIL> → letter <VAR_TAIL> | digit <VAR_TAIL> | eps
+1)  <START> -> 'if' <COND> ':' <THEN> <ELSE_OPT> ';'
+2)  <COND> -> <LOGICAL_TERM> <LOGICAL_EXPR_TAIL>
+3) <LOGICAL_EXPR_TAIL> -> 'or' <LOGICAL_TERM> <LOGICAL_EXPR_TAIL> | eps
+4) <LOGICAL_TERM> -> <LOGICAL_FACTOR> <LOGICAL_TERM_TAIL>
+5) <LOGICAL_TERM_TAIL> -> 'and' <LOGICAL_FACTOR> <LOGICAL_TERM_TAIL> | eps
+6) <LOGICAL_FACTOR> -> 'not' <PRIMARY_COND> | <PRIMARY_COND>
+7) <PRIMARY_COND> -> <COMPARE> | '(' <COND> ')'
+8) <COMPARE> -> <ID> <OPERATOR> <ID>
+9) <OPERATOR> -> '>' | '<' | '>=' | '<=' | '==' | '!='
+10)  <THEN> -> <VAR> '=' <VAR> ';'
+11)  <ELSE_OPT> -> 'else:' <ASSIGN> | eps
+12)  <ASSIGN> -> <VAR> '=' <VAR> ';'
+13)  <VAR> -> letter <VAR_TAIL>
+14)  <VAR_TAIL> -> letter <VAR_TAIL> | digit <VAR_TAIL> | eps
 15) letter
 16) digit
 
