@@ -451,7 +451,6 @@ compi_1/
 16) digit
 ```
 ### 11.1 Схема грамматики
-пока нету
 
 ![Course](screenshot/COMPI_K.png)
 ---
