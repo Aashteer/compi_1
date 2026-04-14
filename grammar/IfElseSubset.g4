@@ -7,7 +7,7 @@ program
     ;
 
 ifStmt
-    : IF cond COLON suite ELSE COLON suite
+    : IF cond COLON SEMI suite ELSE COLON SEMI suite
     ;
 
 cond
