@@ -45,8 +45,6 @@ class Parser:
     def _filter_tokens(tokens: List["Token"]) -> List["Token"]:
         out = []
         for t in tokens:
-            if t.token_type == 'ERROR':
-                continue
             if t.token_type == 'DELIMITER' and t.value in ('(пробел)', '\\t'):
                 continue
             out.append(t)
@@ -131,11 +129,41 @@ class Parser:
                 self._m("Ожидалось ключевое слово 'if' в начале конструкции", 
                         "Expected keyword 'if' at the beginning")
             )
-            return ParseResult(ok=False, errors=self.errors)  # 🔥 ВЫХОД
+            # Восстановление: пропускаем опечатанное первое "if" (например `i`)
+            # и продолжаем разбор, чтобы собрать ошибки в then/else-секциях.
+            if self._current() is not None:
+                self._advance()
         
         self._parse_if_body()
 
         return ParseResult(ok=len(self.errors) == 0, errors=list(self.errors))
+
+    def _recover_to_if_condition_start(self) -> bool:
+        """
+        Пытаемся выставить `self.i` так, чтобы текущее положение соответствовало началу условия if:
+        <IDENTIFIER> <REL_OP> <IDENTIFIER> ':'.
+        """
+        if not self.tokens:
+            return False
+
+        start = max(0, self.i)
+        # Требование ':', т.к. после условия идёт двоеточие.
+        for k in range(start + 1, len(self.tokens) - 2):
+            t = self.tokens[k]
+            if t.token_type != "OPERATOR" or t.value not in self.REL_OPS:
+                continue
+            left = self.tokens[k - 1]
+            right = self.tokens[k + 1]
+            after = self.tokens[k + 2]
+            if (
+                left.token_type == "IDENTIFIER"
+                and right.token_type == "IDENTIFIER"
+                and after.token_type == "DELIMITER"
+                and after.value == ":"
+            ):
+                self.i = k - 1
+                return True
+        return False
 
     def _parse_if_body(self):
         self._depth += 1
@@ -170,10 +198,22 @@ class Parser:
         if self._match_keyword("else"):
             if not self._match_delimiter(":"):
                 t = self._current()
-                self._add_error(self._fragment(t), t.line if t else 1, t.start if t else 1,
-                                self._m("Ожидалось ':' после else", "Expected ':' after else"))
+                self._add_error(
+                    self._fragment(t),
+                    t.line if t else 1,
+                    t.start if t else 1,
+                    self._m("Ожидалось ':' после else", "Expected ':' after else")
+                )
             self._skip_newlines()
             self._parse_suite()
+        else:
+            t = self._current()
+            self._add_error(
+                self._fragment(t),
+                t.line if t else 1,
+                t.start if t else 1,
+                self._m("Ожидалось ключевое слово 'else'", "Expected keyword 'else'")
+            )
 
         self._depth -= 1
 
@@ -187,6 +227,19 @@ class Parser:
             self._skip_newlines()
             t = self._current()
             if t is None or t.value in ('else', 'if'):
+                break
+
+            # `els:` (опечатка вместо `else:`) — не пытаться разбирать как присваивание.
+            # Иначе появится лишняя ошибка про оператор присваивания.
+            next_t = self.tokens[self.i + 1] if self.i + 1 < len(self.tokens) else None
+            if (
+                t is not None
+                and t.token_type == "IDENTIFIER"
+                and t.value == "els"
+                and next_t is not None
+                and next_t.token_type == "DELIMITER"
+                and next_t.value == ":"
+            ):
                 break
 
             self._parse_assign()
@@ -283,6 +336,18 @@ class Parser:
             self._parse_compare()
 
     def _parse_compare(self):
+        # Если встретили токен лексической ошибки (например '@' в условии),
+        # фиксируем её как синтаксическую и пробуем продолжить разбор.
+        t = self._current()
+        if t is not None and t.token_type == "ERROR":
+            self._add_error(
+                self._fragment(t),
+                t.line,
+                t.start,
+                t.value
+            )
+            self._advance()
+
         if not self._is_identifier():
             return
         self._advance()
