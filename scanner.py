@@ -30,13 +30,24 @@ class Token:
         'ERROR': 'ERROR'
     }
 
-    def __init__(self, token_type: str, value: str, line: int, start: int, end: int):
+    def __init__(
+        self,
+        token_type: str,
+        value: str,
+        line: int,
+        start: int,
+        end: int,
+        error_message: str | None = None,
+        raw_lexeme: str | None = None
+    ):
         self.token_type = token_type
         self.value = value
         self.line = line
         self.start = start
         self.end = end
         self.code = self.CODES.get(token_type, 99)
+        self.error_message = error_message
+        self.raw_lexeme = raw_lexeme if raw_lexeme is not None else value
 
     def __repr__(self):
         return f"Token({self.token_type}, '{self.value}', line={self.line}, pos={self.start}-{self.end})"
@@ -48,6 +59,8 @@ class Token:
             return self.EN_TYPES.get(self.token_type, self.token_type)
 
     def get_display_value(self, lang='ru'):
+        if self.token_type == 'ERROR' and self.error_message:
+            return self.error_message
         if self.value == '(пробел)' and lang == 'en':
             return '(space)'
         elif self.value == '\\n' and lang == 'en':
@@ -224,11 +237,28 @@ class Scanner:
             self._advance()
 
     def _handle_error(self, message: str):
-        self._add_error(message, self.line, self.pos, self.pos)
-        self._advance()
+        start_pos = self.pos
+        bad_fragment = ''
 
-    def _add_error(self, message: str, line: int, start: int, end: int):
-        token = Token('ERROR', message, line, start, end)
+        while self.index < len(self.text):
+            ch = self.current_char
+            if ch in (' ', '\t', '\n'):
+                break
+            if ch.isdigit() or ch.isalpha() or ch == '_':
+                break
+            if ch in self._get_operator_chars() or ch in self._get_delimiter_chars():
+                break
+            bad_fragment += ch
+            self._advance()
+
+        if not bad_fragment:
+            bad_fragment = self.current_char
+            self._advance()
+
+        self._add_error(message, self.line, start_pos, start_pos + len(bad_fragment) - 1, bad_fragment)
+
+    def _add_error(self, message: str, line: int, start: int, end: int, raw_lexeme: str | None = None):
+        token = Token('ERROR', raw_lexeme or message, line, start, end, error_message=message, raw_lexeme=raw_lexeme)
         self.errors.append(token)
         self.tokens.append(token)
 
